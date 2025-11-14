@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { ReceiptData } from "@/app/receipt-scanner/page";
+import { useState, useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import html2canvas from "html2canvas";
+import { ReceiptData, ReceiptItem } from "@/app/receipt-scanner/page";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RotateCcw, DollarSign, Users, Share2, Check, Copy, Mail, MessageSquare } from "lucide-react";
+import { RotateCcw, DollarSign, Users, Share2, Check, Copy, Mail, MessageSquare, CreditCard, Edit2, Pencil, Trash2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
@@ -16,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import ReceiptPreviewCard from "./ReceiptPreviewCard";
 
 type ReceiptResultsProps = {
   receiptData: ReceiptData;
@@ -23,11 +26,73 @@ type ReceiptResultsProps = {
 };
 
 export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsProps) {
+  const [editableReceiptData, setEditableReceiptData] = useState<ReceiptData>(receiptData);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [personName, setPersonName] = useState("");
   const [venmoUsername, setVenmoUsername] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [isApplePayAvailable, setIsApplePayAvailable] = useState(false);
+  const [editingItem, setEditingItem] = useState<{ id: string; field: 'name' | 'price' } | null>(null);
+  const [editingField, setEditingField] = useState<'tax' | 'tip' | null>(null);
+
+  // Update editable receipt data when prop changes
+  useEffect(() => {
+    console.log('ReceiptResults: receiptData changed', receiptData);
+    setEditableReceiptData(receiptData);
+  }, [receiptData]);
+
+  // Debug: Log when editing state changes
+  useEffect(() => {
+    console.log('ReceiptResults: editingItem changed', editingItem);
+  }, [editingItem]);
+
+  // Debug: Log editable receipt data
+  useEffect(() => {
+    console.log('ReceiptResults: editableReceiptData', editableReceiptData);
+  }, [editableReceiptData]);
+
+  // Check if we're on iOS/Mac (where Apple Pay Cash in Messages is available)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const userAgent = navigator.userAgent.toLowerCase();
+      const platform = navigator.platform.toLowerCase();
+      
+      // Check if we're on iOS
+      const isIOS = /ipad|iphone|ipod/.test(userAgent) || 
+                   (platform === 'macintel' && navigator.maxTouchPoints > 1);
+      
+      // Check if we're on macOS
+      const isMac = /macintosh|mac intel|macppc|mac68k/.test(userAgent) || 
+                   platform.includes('mac');
+      
+      // Check if we're on Safari
+      // Safari's user agent contains "safari" but not "chrome" or "firefox"
+      const isSafari = /safari/.test(userAgent) && 
+                      !/chrome|firefox|edge|opera/.test(userAgent) &&
+                      !/crios|fxios/.test(userAgent);
+      
+      // Also check vendor for Safari
+      const isSafariVendor = !!navigator.vendor && navigator.vendor.includes('Apple');
+      
+      // Apple Pay Cash in Messages is available on iOS and macOS Safari
+      // Show it on iOS or macOS Safari (be more permissive)
+      const shouldShow = isIOS || (isMac && (isSafari || isSafariVendor));
+      
+      console.log('Apple Pay detection:', { 
+        isIOS, 
+        isMac, 
+        isSafari, 
+        isSafariVendor,
+        shouldShow, 
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        vendor: navigator.vendor
+      });
+      
+      setIsApplePayAvailable(shouldShow);
+    }
+  }, []);
 
   const toggleItem = (itemId: string) => {
     const newSelected = new Set(selectedItems);
@@ -39,15 +104,73 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
     setSelectedItems(newSelected);
   };
 
+  // Recalculate totals when items change
+  const recalculateTotals = (items: ReceiptItem[]) => {
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    // Keep tax and tip as percentages of subtotal if possible, otherwise keep original
+    const taxRatio = editableReceiptData.subtotal > 0 ? editableReceiptData.tax / editableReceiptData.subtotal : 0;
+    const tipRatio = editableReceiptData.subtotal > 0 ? editableReceiptData.tip / editableReceiptData.subtotal : 0;
+    const tax = subtotal * taxRatio;
+    const tip = subtotal * tipRatio;
+    const total = subtotal + tax + tip;
+    
+    return { subtotal, tax, tip, total };
+  };
+
+  const updateItemName = (itemId: string, newName: string) => {
+    const updatedItems = editableReceiptData.items.map(item =>
+      item.id === itemId ? { ...item, name: newName } : item
+    );
+    const totals = recalculateTotals(updatedItems);
+    setEditableReceiptData({ ...editableReceiptData, items: updatedItems, ...totals });
+    setEditingItem(null);
+  };
+
+  const updateItemPrice = (itemId: string, newPrice: number) => {
+    if (isNaN(newPrice) || newPrice < 0) return;
+    const updatedItems = editableReceiptData.items.map(item =>
+      item.id === itemId ? { ...item, price: newPrice } : item
+    );
+    const totals = recalculateTotals(updatedItems);
+    setEditableReceiptData({ ...editableReceiptData, items: updatedItems, ...totals });
+    setEditingItem(null);
+  };
+
+  const deleteItem = (itemId: string) => {
+    // Remove from selected items if it was selected
+    const newSelected = new Set(selectedItems);
+    newSelected.delete(itemId);
+    setSelectedItems(newSelected);
+
+    // Remove item from list
+    const updatedItems = editableReceiptData.items.filter(item => item.id !== itemId);
+    const totals = recalculateTotals(updatedItems);
+    setEditableReceiptData({ ...editableReceiptData, items: updatedItems, ...totals });
+  };
+
+  const updateTax = (newTax: number) => {
+    if (isNaN(newTax) || newTax < 0) return;
+    const total = editableReceiptData.subtotal + newTax + editableReceiptData.tip;
+    setEditableReceiptData({ ...editableReceiptData, tax: newTax, total });
+    setEditingField(null);
+  };
+
+  const updateTip = (newTip: number) => {
+    if (isNaN(newTip) || newTip < 0) return;
+    const total = editableReceiptData.subtotal + editableReceiptData.tax + newTip;
+    setEditableReceiptData({ ...editableReceiptData, tip: newTip, total });
+    setEditingField(null);
+  };
+
   const calculateSelectedTotal = () => {
-    const selectedItemsTotal = receiptData.items
+    const selectedItemsTotal = editableReceiptData.items
       .filter((item) => selectedItems.has(item.id))
       .reduce((sum, item) => sum + item.price * item.quantity, 0);
     
     // Proportionally calculate tax and tip
-    const ratio = selectedItemsTotal / receiptData.subtotal;
-    const proportionalTax = receiptData.tax * ratio;
-    const proportionalTip = receiptData.tip * ratio;
+    const ratio = editableReceiptData.subtotal > 0 ? selectedItemsTotal / editableReceiptData.subtotal : 0;
+    const proportionalTax = editableReceiptData.tax * ratio;
+    const proportionalTip = editableReceiptData.tip * ratio;
     
     return selectedItemsTotal + proportionalTax + proportionalTip;
   };
@@ -73,9 +196,38 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
     }, 1000);
   };
 
+  const handleApplePay = () => {
+    const amount = calculateSelectedTotal().toFixed(2);
+    const selectedItemsList = editableReceiptData.items
+      .filter((item) => selectedItems.has(item.id))
+      .map((item) => `${item.name}${item.quantity > 1 ? ` (${item.quantity}x)` : ''}`)
+      .join(', ');
+    
+    // Create message text for Apple Pay Cash
+    const message = `I owe you $${amount} for: ${selectedItemsList}`;
+    
+    // Try to open Messages app with payment request
+    // On iOS, this will open Messages where user can use Apple Pay Cash
+    const messagesUrl = `sms:&body=${encodeURIComponent(message)}`;
+    
+    // Try to open Messages app
+    window.location.href = messagesUrl;
+    
+    // Fallback: Copy message to clipboard and show instructions
+    setTimeout(() => {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(message).then(() => {
+          alert(`Message copied! Open Messages and paste to send payment request via Apple Pay Cash.`);
+        });
+      } else {
+        alert(`Open Messages and send: "${message}" to request payment via Apple Pay Cash.`);
+      }
+    }, 500);
+  };
+
   const generateShareLink = (): string => {
     // Encode receiptData as base64 JSON
-    const jsonString = JSON.stringify(receiptData);
+    const jsonString = JSON.stringify(editableReceiptData);
     // Use unescape(encodeURIComponent()) to handle Unicode characters properly
     const base64 = btoa(unescape(encodeURIComponent(jsonString)));
     // URL-encode the base64 string to handle special characters (+, /, =)
@@ -106,16 +258,26 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
 
   const handleShare = async () => {
     const shareLink = generateShareLink();
-    const shareText = `Check out this receipt! Split the bill with me: ${shareLink}`;
+    // Format with URL on new line so Messages auto-detects it as clickable link
+    const shareText = `Check out this receipt! Split the bill with me\n\n${shareLink}`;
 
     // Try native Web Share API first (works on mobile and some desktop browsers)
     if (navigator.share) {
       try {
-        await navigator.share({
+        // Generate the preview image
+        const imageBlob = await generateReceiptImage();
+        
+        const shareData: ShareData = {
           title: 'Receipt to Split',
-          text: shareText,
-          url: shareLink,
-        });
+          text: shareText, // URL in text on new line will be auto-detected
+        };
+        
+        // Add image if available and supported
+        if (imageBlob && navigator.canShare && navigator.canShare({ files: [new File([imageBlob], 'receipt.png', { type: 'image/png' })] })) {
+          shareData.files = [new File([imageBlob], 'receipt-preview.png', { type: 'image/png' })];
+        }
+        
+        await navigator.share(shareData);
         return; // Successfully shared via native share
       } catch (err) {
         // User cancelled or share failed, fall through to dialog
@@ -134,17 +296,172 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
     copyToClipboard(shareLink);
   };
 
-  const handleShareViaEmail = () => {
+  const generateReceiptImage = async (): Promise<Blob | null> => {
+    try {
+      // Create an iframe to completely isolate styles
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'absolute';
+      iframe.style.left = '-9999px';
+      iframe.style.top = '0';
+      iframe.style.width = '700px';
+      iframe.style.height = '800px';
+      iframe.style.border = 'none';
+      document.body.appendChild(iframe);
+
+      // Wait for iframe to load
+      await new Promise((resolve) => {
+        iframe.onload = resolve;
+        iframe.src = 'about:blank';
+      });
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!iframeDoc) {
+        document.body.removeChild(iframe);
+        return null;
+      }
+
+      // Write basic HTML structure with no external styles
+      iframeDoc.open();
+      iframeDoc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: system-ui, -apple-system, sans-serif; }
+            </style>
+          </head>
+          <body></body>
+        </html>
+      `);
+      iframeDoc.close();
+
+      // Create container in iframe
+      const container = iframeDoc.body;
+      container.style.width = '600px';
+      container.style.margin = '0 auto';
+      container.style.padding = '32px';
+      container.style.background = '#f0f4f8';
+
+      // Render the preview card in iframe
+      const shareLink = generateShareLink();
+      const root = createRoot(container);
+      root.render(<ReceiptPreviewCard receiptData={editableReceiptData} shareLink={shareLink} />);
+
+      // Wait for render and QR code to load
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Wait for QR code image to load
+      const checkQRCode = () => {
+        return new Promise<void>((resolve) => {
+          const qrImg = container.querySelector('#receipt-preview img[alt="QR Code"]') as HTMLImageElement;
+          if (qrImg && qrImg.complete && qrImg.naturalWidth > 0) {
+            resolve();
+          } else {
+            // Check again after a delay
+            setTimeout(() => {
+              const retryImg = container.querySelector('#receipt-preview img[alt="QR Code"]') as HTMLImageElement;
+              if (retryImg && retryImg.complete && retryImg.naturalWidth > 0) {
+                resolve();
+              } else {
+                // Resolve anyway after max wait
+                setTimeout(resolve, 1000);
+              }
+            }, 500);
+          }
+        });
+      };
+      await checkQRCode();
+
+      // Find the preview element
+      const previewElement = container.querySelector('#receipt-preview') as HTMLElement;
+      if (!previewElement) {
+        root.unmount();
+        document.body.removeChild(iframe);
+        return null;
+      }
+
+      // Generate image using html2canvas
+      const canvas = await html2canvas(previewElement, {
+        backgroundColor: '#f0f4f8',
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: false,
+        windowWidth: 700,
+        windowHeight: 800,
+      } as any);
+
+      // Clean up
+      root.unmount();
+      document.body.removeChild(iframe);
+
+      // Convert to blob
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => {
+          resolve(blob);
+        }, 'image/png', 0.95);
+      });
+    } catch (error) {
+      console.error('Failed to generate image:', error);
+      return null;
+    }
+  };
+
+  const handleShareViaEmail = async () => {
     const shareLink = generateShareLink();
     const subject = encodeURIComponent('Receipt to Split');
     const body = encodeURIComponent(`Check out this receipt! Split the bill with me:\n\n${shareLink}`);
+    
+    // Try to generate and attach image if possible
+    const imageBlob = await generateReceiptImage();
+    
+    if (imageBlob && navigator.share) {
+      try {
+        const imageFile = new File([imageBlob], 'receipt-preview.png', { type: 'image/png' });
+        // Include URL in text on new line for better email client support
+        await navigator.share({
+          title: 'Receipt to Split',
+          text: `Check out this receipt! Split the bill with me\n\n${shareLink}`,
+          files: [imageFile],
+        });
+        return;
+      } catch (err) {
+        console.error('Share with image failed:', err);
+      }
+    }
+    
+    // Fallback to mailto
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
-  const handleShareViaMessage = () => {
+  const handleShareViaMessage = async () => {
     const shareLink = generateShareLink();
-    const text = encodeURIComponent(`Check out this receipt! Split the bill with me: ${shareLink}`);
-    window.location.href = `sms:?body=${text}`;
+    // Format message so URL appears on its own line - Messages will auto-detect and make it clickable
+    const text = `Check out this receipt! Split the bill with me\n\n${shareLink}`;
+    
+    // Generate the preview image
+    const imageBlob = await generateReceiptImage();
+    
+    if (imageBlob && navigator.share) {
+      try {
+        // Create a File from the blob
+        const imageFile = new File([imageBlob], 'receipt-preview.png', { type: 'image/png' });
+        
+        // For Messages, include URL in text on separate line so it's auto-detected as clickable
+        await navigator.share({
+          title: 'Receipt to Split',
+          text: text, // URL in text on new line will be auto-detected as clickable link
+          files: [imageFile],
+        });
+        return;
+      } catch (err) {
+        console.error('Share with image failed:', err);
+      }
+    }
+    
+    // Fallback to SMS link - URL on new line will be auto-detected
+    window.location.href = `sms:?body=${encodeURIComponent(text)}`;
   };
 
   const selectedTotal = calculateSelectedTotal();
@@ -153,7 +470,7 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold">Receipt Items</h2>
+          <h2 className="text-3xl font-bold">receipt items</h2>
           <p className="text-gray-600 dark:text-gray-400">
             Select items to split the bill
           </p>
@@ -176,30 +493,166 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
           <Card className="p-6">
             <h3 className="text-xl font-semibold mb-4">Items</h3>
             <div className="space-y-3">
-              {receiptData.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <Checkbox
-                      checked={selectedItems.has(item.id)}
-                      onCheckedChange={() => toggleItem(item.id)}
-                    />
-                    <div className="flex-1">
-                      <p className="font-medium">{item.name}</p>
-                      {item.quantity > 1 && (
-                        <p className="text-sm text-gray-500">
-                          Qty: {item.quantity} × ${item.price.toFixed(2)}
-                        </p>
+              {editableReceiptData?.items?.length > 0 ? editableReceiptData.items.map((item) => {
+                const isEditingName = editingItem?.id === item.id && editingItem?.field === 'name';
+                const isEditingPrice = editingItem?.id === item.id && editingItem?.field === 'price';
+                
+                return (
+                  <div
+                    key={item.id}
+                    className="group flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors relative"
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <Checkbox
+                        checked={selectedItems.has(item.id)}
+                        onCheckedChange={() => toggleItem(item.id)}
+                      />
+                      <div className="flex-1 flex items-center gap-2">
+                        {isEditingName ? (
+                          <Input
+                            defaultValue={item.name}
+                            onBlur={(e) => {
+                              const newName = e.target.value.trim();
+                              if (newName && newName !== item.name) {
+                                updateItemName(item.id, newName);
+                              } else {
+                                setEditingItem(null);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const newName = e.currentTarget.value.trim();
+                                if (newName && newName !== item.name) {
+                                  updateItemName(item.id, newName);
+                                } else {
+                                  setEditingItem(null);
+                                }
+                              } else if (e.key === 'Escape') {
+                                setEditingItem(null);
+                              }
+                            }}
+                            autoFocus
+                            className="h-8 text-sm flex-1"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <div className="flex-1">
+                            <p 
+                              className="font-medium cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 inline-block"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log('Clicking to edit name for item:', item.id);
+                                setEditingItem({ id: item.id, field: 'name' });
+                              }}
+                              title="Click to edit"
+                            >
+                              {item.name}
+                            </p>
+                            {item.quantity > 1 && (
+                              <p className="text-sm text-gray-500 mt-1">
+                                Qty: {item.quantity} × ${item.price.toFixed(2)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {!isEditingName && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log('Clicking pencil to edit name for item:', item.id);
+                              setEditingItem({ id: item.id, field: 'name' });
+                            }}
+                            className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-opacity"
+                            title="Edit item name"
+                            type="button"
+                          >
+                            <Pencil className="w-4 h-4 text-gray-500" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isEditingPrice ? (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          defaultValue={item.price.toFixed(2)}
+                          onBlur={(e) => {
+                            const newPrice = parseFloat(e.target.value);
+                            if (!isNaN(newPrice) && newPrice >= 0 && newPrice !== item.price) {
+                              updateItemPrice(item.id, newPrice);
+                            } else {
+                              setEditingItem(null);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const newPrice = parseFloat(e.currentTarget.value);
+                              if (!isNaN(newPrice) && newPrice >= 0 && newPrice !== item.price) {
+                                updateItemPrice(item.id, newPrice);
+                              } else {
+                                setEditingItem(null);
+                              }
+                            } else if (e.key === 'Escape') {
+                              setEditingItem(null);
+                            }
+                          }}
+                          autoFocus
+                          className="h-8 w-24 text-sm text-right"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <>
+                          <span 
+                            className="font-semibold cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log('Clicking to edit price for item:', item.id);
+                              setEditingItem({ id: item.id, field: 'price' });
+                            }}
+                            title="Click to edit price"
+                          >
+                            ${(item.price * item.quantity).toFixed(2)}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log('Clicking pencil to edit price for item:', item.id);
+                              setEditingItem({ id: item.id, field: 'price' });
+                            }}
+                            className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-opacity ml-1"
+                            title="Edit price"
+                            type="button"
+                          >
+                            <Pencil className="w-4 h-4 text-gray-500" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (confirm(`Delete "${item.name}"?`)) {
+                                deleteItem(item.id);
+                              }
+                            }}
+                            className="opacity-60 hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-opacity ml-1"
+                            title="Delete item"
+                            type="button"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
-                  <span className="font-semibold">
-                    ${(item.price * item.quantity).toFixed(2)}
-                  </span>
-                </div>
-              ))}
+                );
+              }) : (
+                <p className="text-gray-500">No items found</p>
+              )}
             </div>
 
             <Separator className="my-4" />
@@ -207,20 +660,136 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
                 <span>Subtotal</span>
-                <span>${receiptData.subtotal.toFixed(2)}</span>
+                <span>${editableReceiptData.subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
+              <div className="flex justify-between items-center text-gray-600 dark:text-gray-400 group">
                 <span>Tax</span>
-                <span>${receiptData.tax.toFixed(2)}</span>
+                <div className="flex items-center gap-2">
+                  {editingField === 'tax' ? (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      defaultValue={editableReceiptData.tax.toFixed(2)}
+                      onBlur={(e) => {
+                        const newTax = parseFloat(e.target.value);
+                        if (!isNaN(newTax) && newTax >= 0 && newTax !== editableReceiptData.tax) {
+                          updateTax(newTax);
+                        } else {
+                          setEditingField(null);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const newTax = parseFloat(e.currentTarget.value);
+                          if (!isNaN(newTax) && newTax >= 0 && newTax !== editableReceiptData.tax) {
+                            updateTax(newTax);
+                          } else {
+                            setEditingField(null);
+                          }
+                        } else if (e.key === 'Escape') {
+                          setEditingField(null);
+                        }
+                      }}
+                      autoFocus
+                      className="h-8 w-24 text-sm text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <>
+                      <span 
+                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditingField('tax');
+                        }}
+                        title="Click to edit tax"
+                      >
+                        ${editableReceiptData.tax.toFixed(2)}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditingField('tax');
+                        }}
+                        className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-opacity"
+                        title="Edit tax"
+                        type="button"
+                      >
+                        <Pencil className="w-3 h-3 text-gray-500" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
+              <div className="flex justify-between items-center text-gray-600 dark:text-gray-400 group">
                 <span>Tip</span>
-                <span>${receiptData.tip.toFixed(2)}</span>
+                <div className="flex items-center gap-2">
+                  {editingField === 'tip' ? (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      defaultValue={editableReceiptData.tip.toFixed(2)}
+                      onBlur={(e) => {
+                        const newTip = parseFloat(e.target.value);
+                        if (!isNaN(newTip) && newTip >= 0 && newTip !== editableReceiptData.tip) {
+                          updateTip(newTip);
+                        } else {
+                          setEditingField(null);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const newTip = parseFloat(e.currentTarget.value);
+                          if (!isNaN(newTip) && newTip >= 0 && newTip !== editableReceiptData.tip) {
+                            updateTip(newTip);
+                          } else {
+                            setEditingField(null);
+                          }
+                        } else if (e.key === 'Escape') {
+                          setEditingField(null);
+                        }
+                      }}
+                      autoFocus
+                      className="h-8 w-24 text-sm text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <>
+                      <span 
+                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditingField('tip');
+                        }}
+                        title="Click to edit tip"
+                      >
+                        ${editableReceiptData.tip.toFixed(2)}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditingField('tip');
+                        }}
+                        className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-opacity"
+                        title="Edit tip"
+                        type="button"
+                      >
+                        <Pencil className="w-3 h-3 text-gray-500" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <Separator className="my-2" />
               <div className="flex justify-between text-lg font-bold">
                 <span>Total</span>
-                <span>${receiptData.total.toFixed(2)}</span>
+                <span>${editableReceiptData.total.toFixed(2)}</span>
               </div>
             </div>
           </Card>
@@ -265,6 +834,18 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
                   Enter the person to pay
                 </p>
               </div>
+
+              {isApplePayAvailable && (
+                <Button
+                  className="w-full bg-black text-white hover:bg-gray-800"
+                  size="lg"
+                  onClick={handleApplePay}
+                  disabled={selectedItems.size === 0}
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Request via Apple Pay Cash
+                </Button>
+              )}
 
               <Button
                 className="w-full"

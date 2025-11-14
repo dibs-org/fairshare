@@ -139,11 +139,15 @@ export default function ReceiptScannerPage() {
     setError(null);
 
     try {
+      console.log('Image captured, file size:', imageFile.size, 'bytes');
+      
       // Resize image to be under 1024 KB
       const resizedFile = await resizeImage(imageFile, 1024);
+      console.log('Image resized, new size:', resizedFile.size, 'bytes');
       
       // Convert resized image to base64
       const base64 = await fileToBase64(resizedFile);
+      console.log('Image converted to base64, length:', base64.length);
 
       // Send to API for processing
       const response = await fetch("/api/process-receipt", {
@@ -154,13 +158,28 @@ export default function ReceiptScannerPage() {
         body: JSON.stringify({ image: base64 }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to process receipt");
-      }
+      console.log('API response status:', response.status);
 
       const data = await response.json();
+      console.log('API response data:', data);
+
+      if (!response.ok) {
+        // Extract error message from API response
+        const errorMessage = data.error || "Failed to process receipt";
+        console.error('API error:', errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      // Check if response contains an error field (even if status is OK)
+      if (data.error) {
+        console.error('Response contains error:', data.error);
+        throw new Error(data.error);
+      }
+
+      console.log('Receipt data received:', data);
       setReceiptData(data);
     } catch (err) {
+      console.error('Error processing receipt:', err);
       setError(err instanceof Error ? err.message : "Failed to process receipt");
     } finally {
       setIsProcessing(false);

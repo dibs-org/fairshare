@@ -18,7 +18,12 @@ export default function ReceiptUpload({ onImageCapture, error }: ReceiptUploadPr
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      console.log('File selected:', file.name, file.size, 'bytes', file.type);
       onImageCapture(file);
+      // Reset input so same file can be selected again
+      event.target.value = '';
+    } else {
+      console.log('No file selected');
     }
   };
 
@@ -39,13 +44,24 @@ export default function ReceiptUpload({ onImageCapture, error }: ReceiptUploadPr
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card className="p-8 text-center hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed"
-          onClick={() => cameraInputRef.current?.click()}>
+          onClick={() => {
+            console.log('Card clicked, triggering camera input');
+            cameraInputRef.current?.click();
+          }}>
           <Camera className="w-16 h-16 text-blue-600 dark:text-blue-400 mx-auto mb-4" />
           <h3 className="text-xl font-semibold mb-2">Take Photo</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Use your camera to capture the receipt
           </p>
-          <Button className="w-full">
+          <Button 
+            className="w-full"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Button clicked, triggering camera input');
+              cameraInputRef.current?.click();
+            }}
+          >
             <Camera className="w-4 h-4 mr-2" />
             Open Camera
           </Button>
@@ -60,13 +76,25 @@ export default function ReceiptUpload({ onImageCapture, error }: ReceiptUploadPr
         </Card>
 
         <Card className="p-8 text-center hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed"
-          onClick={() => fileInputRef.current?.click()}>
+          onClick={() => {
+            console.log('Card clicked, triggering file input');
+            fileInputRef.current?.click();
+          }}>
           <Upload className="w-16 h-16 text-purple-600 dark:text-purple-400 mx-auto mb-4" />
           <h3 className="text-xl font-semibold mb-2">Upload Image</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Choose a photo from your device
           </p>
-          <Button className="w-full" variant="outline">
+          <Button 
+            className="w-full" 
+            variant="outline"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Button clicked, triggering file input');
+              fileInputRef.current?.click();
+            }}
+          >
             <Upload className="w-4 h-4 mr-2" />
             Choose File
           </Button>
