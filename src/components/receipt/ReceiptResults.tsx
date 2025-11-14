@@ -9,7 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RotateCcw, DollarSign, Users, Share2, Check, Copy, Mail, MessageSquare, CreditCard, Edit2, Pencil, Trash2 } from "lucide-react";
+import {
+  RotateCcw,
+  DollarSign,
+  Users,
+  Share2,
+  Check,
+  Copy,
+  Mail,
+  MessageSquare,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
@@ -25,71 +36,82 @@ type ReceiptResultsProps = {
   onReset: () => void;
 };
 
-export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsProps) {
-  const [editableReceiptData, setEditableReceiptData] = useState<ReceiptData>(receiptData);
+export default function ReceiptResults({
+  receiptData,
+  onReset,
+}: ReceiptResultsProps) {
+  const [editableReceiptData, setEditableReceiptData] =
+    useState<ReceiptData>(receiptData);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [personName, setPersonName] = useState("");
   const [venmoUsername, setVenmoUsername] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [isApplePayAvailable, setIsApplePayAvailable] = useState(false);
-  const [editingItem, setEditingItem] = useState<{ id: string; field: 'name' | 'price' } | null>(null);
-  const [editingField, setEditingField] = useState<'tax' | 'tip' | null>(null);
+  const [editingItem, setEditingItem] = useState<{
+    id: string;
+    field: "name" | "price";
+  } | null>(null);
+  const [editingField, setEditingField] = useState<"tax" | "tip" | null>(null);
 
   // Update editable receipt data when prop changes
   useEffect(() => {
-    console.log('ReceiptResults: receiptData changed', receiptData);
+    console.log("ReceiptResults: receiptData changed", receiptData);
     setEditableReceiptData(receiptData);
   }, [receiptData]);
 
   // Debug: Log when editing state changes
   useEffect(() => {
-    console.log('ReceiptResults: editingItem changed', editingItem);
+    console.log("ReceiptResults: editingItem changed", editingItem);
   }, [editingItem]);
 
   // Debug: Log editable receipt data
   useEffect(() => {
-    console.log('ReceiptResults: editableReceiptData', editableReceiptData);
+    console.log("ReceiptResults: editableReceiptData", editableReceiptData);
   }, [editableReceiptData]);
 
   // Check if we're on iOS/Mac (where Apple Pay Cash in Messages is available)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const userAgent = navigator.userAgent.toLowerCase();
       const platform = navigator.platform.toLowerCase();
-      
+
       // Check if we're on iOS
-      const isIOS = /ipad|iphone|ipod/.test(userAgent) || 
-                   (platform === 'macintel' && navigator.maxTouchPoints > 1);
-      
+      const isIOS =
+        /ipad|iphone|ipod/.test(userAgent) ||
+        (platform === "macintel" && navigator.maxTouchPoints > 1);
+
       // Check if we're on macOS
-      const isMac = /macintosh|mac intel|macppc|mac68k/.test(userAgent) || 
-                   platform.includes('mac');
-      
+      const isMac =
+        /macintosh|mac intel|macppc|mac68k/.test(userAgent) ||
+        platform.includes("mac");
+
       // Check if we're on Safari
       // Safari's user agent contains "safari" but not "chrome" or "firefox"
-      const isSafari = /safari/.test(userAgent) && 
-                      !/chrome|firefox|edge|opera/.test(userAgent) &&
-                      !/crios|fxios/.test(userAgent);
-      
+      const isSafari =
+        /safari/.test(userAgent) &&
+        !/chrome|firefox|edge|opera/.test(userAgent) &&
+        !/crios|fxios/.test(userAgent);
+
       // Also check vendor for Safari
-      const isSafariVendor = !!navigator.vendor && navigator.vendor.includes('Apple');
-      
+      const isSafariVendor =
+        !!navigator.vendor && navigator.vendor.includes("Apple");
+
       // Apple Pay Cash in Messages is available on iOS and macOS Safari
       // Show it on iOS or macOS Safari (be more permissive)
       const shouldShow = isIOS || (isMac && (isSafari || isSafariVendor));
-      
-      console.log('Apple Pay detection:', { 
-        isIOS, 
-        isMac, 
-        isSafari, 
+
+      console.log("Apple Pay detection:", {
+        isIOS,
+        isMac,
+        isSafari,
         isSafariVendor,
-        shouldShow, 
+        shouldShow,
         userAgent: navigator.userAgent,
         platform: navigator.platform,
-        vendor: navigator.vendor
+        vendor: navigator.vendor,
       });
-      
+
       setIsApplePayAvailable(shouldShow);
     }
   }, []);
@@ -106,33 +128,50 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
 
   // Recalculate totals when items change
   const recalculateTotals = (items: ReceiptItem[]) => {
-    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const subtotal = items.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
     // Keep tax and tip as percentages of subtotal if possible, otherwise keep original
-    const taxRatio = editableReceiptData.subtotal > 0 ? editableReceiptData.tax / editableReceiptData.subtotal : 0;
-    const tipRatio = editableReceiptData.subtotal > 0 ? editableReceiptData.tip / editableReceiptData.subtotal : 0;
+    const taxRatio =
+      editableReceiptData.subtotal > 0
+        ? editableReceiptData.tax / editableReceiptData.subtotal
+        : 0;
+    const tipRatio =
+      editableReceiptData.subtotal > 0
+        ? editableReceiptData.tip / editableReceiptData.subtotal
+        : 0;
     const tax = subtotal * taxRatio;
     const tip = subtotal * tipRatio;
     const total = subtotal + tax + tip;
-    
+
     return { subtotal, tax, tip, total };
   };
 
   const updateItemName = (itemId: string, newName: string) => {
-    const updatedItems = editableReceiptData.items.map(item =>
+    const updatedItems = editableReceiptData.items.map((item) =>
       item.id === itemId ? { ...item, name: newName } : item
     );
     const totals = recalculateTotals(updatedItems);
-    setEditableReceiptData({ ...editableReceiptData, items: updatedItems, ...totals });
+    setEditableReceiptData({
+      ...editableReceiptData,
+      items: updatedItems,
+      ...totals,
+    });
     setEditingItem(null);
   };
 
   const updateItemPrice = (itemId: string, newPrice: number) => {
     if (isNaN(newPrice) || newPrice < 0) return;
-    const updatedItems = editableReceiptData.items.map(item =>
+    const updatedItems = editableReceiptData.items.map((item) =>
       item.id === itemId ? { ...item, price: newPrice } : item
     );
     const totals = recalculateTotals(updatedItems);
-    setEditableReceiptData({ ...editableReceiptData, items: updatedItems, ...totals });
+    setEditableReceiptData({
+      ...editableReceiptData,
+      items: updatedItems,
+      ...totals,
+    });
     setEditingItem(null);
   };
 
@@ -143,21 +182,29 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
     setSelectedItems(newSelected);
 
     // Remove item from list
-    const updatedItems = editableReceiptData.items.filter(item => item.id !== itemId);
+    const updatedItems = editableReceiptData.items.filter(
+      (item) => item.id !== itemId
+    );
     const totals = recalculateTotals(updatedItems);
-    setEditableReceiptData({ ...editableReceiptData, items: updatedItems, ...totals });
+    setEditableReceiptData({
+      ...editableReceiptData,
+      items: updatedItems,
+      ...totals,
+    });
   };
 
   const updateTax = (newTax: number) => {
     if (isNaN(newTax) || newTax < 0) return;
-    const total = editableReceiptData.subtotal + newTax + editableReceiptData.tip;
+    const total =
+      editableReceiptData.subtotal + newTax + editableReceiptData.tip;
     setEditableReceiptData({ ...editableReceiptData, tax: newTax, total });
     setEditingField(null);
   };
 
   const updateTip = (newTip: number) => {
     if (isNaN(newTip) || newTip < 0) return;
-    const total = editableReceiptData.subtotal + editableReceiptData.tax + newTip;
+    const total =
+      editableReceiptData.subtotal + editableReceiptData.tax + newTip;
     setEditableReceiptData({ ...editableReceiptData, tip: newTip, total });
     setEditingField(null);
   };
@@ -166,33 +213,36 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
     const selectedItemsTotal = editableReceiptData.items
       .filter((item) => selectedItems.has(item.id))
       .reduce((sum, item) => sum + item.price * item.quantity, 0);
-    
+
     // Proportionally calculate tax and tip
-    const ratio = editableReceiptData.subtotal > 0 ? selectedItemsTotal / editableReceiptData.subtotal : 0;
+    const ratio =
+      editableReceiptData.subtotal > 0
+        ? selectedItemsTotal / editableReceiptData.subtotal
+        : 0;
     const proportionalTax = editableReceiptData.tax * ratio;
     const proportionalTip = editableReceiptData.tip * ratio;
-    
+
     return selectedItemsTotal + proportionalTax + proportionalTip;
   };
 
   const handleVenmoPayment = () => {
     const amount = calculateSelectedTotal().toFixed(2);
     const note = `Payment for ${selectedItems.size} item(s) from receipt`;
-    
+
     // Create Venmo deep link
     let venmoUrl = `venmo://paycharge?txn=pay&amount=${amount}&note=${encodeURIComponent(note)}`;
-    
+
     if (venmoUsername) {
       venmoUrl += `&recipients=${encodeURIComponent(venmoUsername)}`;
     }
-    
+
     // Try to open Venmo app, fallback to web
     window.location.href = venmoUrl;
-    
+
     // Fallback to web version after a delay
     setTimeout(() => {
-      const webUrl = `https://venmo.com/?txn=pay&amount=${amount}&note=${encodeURIComponent(note)}${venmoUsername ? `&recipients=${encodeURIComponent(venmoUsername)}` : ''}`;
-      window.open(webUrl, '_blank');
+      const webUrl = `https://venmo.com/?txn=pay&amount=${amount}&note=${encodeURIComponent(note)}${venmoUsername ? `&recipients=${encodeURIComponent(venmoUsername)}` : ""}`;
+      window.open(webUrl, "_blank");
     }, 1000);
   };
 
@@ -200,27 +250,34 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
     const amount = calculateSelectedTotal().toFixed(2);
     const selectedItemsList = editableReceiptData.items
       .filter((item) => selectedItems.has(item.id))
-      .map((item) => `${item.name}${item.quantity > 1 ? ` (${item.quantity}x)` : ''}`)
-      .join(', ');
-    
+      .map(
+        (item) =>
+          `${item.name}${item.quantity > 1 ? ` (${item.quantity}x)` : ""}`
+      )
+      .join(", ");
+
     // Create message text for Apple Pay Cash
     const message = `I owe you $${amount} for: ${selectedItemsList}`;
-    
+
     // Try to open Messages app with payment request
     // On iOS, this will open Messages where user can use Apple Pay Cash
     const messagesUrl = `sms:&body=${encodeURIComponent(message)}`;
-    
+
     // Try to open Messages app
     window.location.href = messagesUrl;
-    
+
     // Fallback: Copy message to clipboard and show instructions
     setTimeout(() => {
       if (navigator.clipboard) {
         navigator.clipboard.writeText(message).then(() => {
-          alert(`Message copied! Open Messages and paste to send payment request via Apple Pay Cash.`);
+          alert(
+            `Message copied! Open Messages and paste to send payment request via Apple Pay Cash.`
+          );
         });
       } else {
-        alert(`Open Messages and send: "${message}" to request payment via Apple Pay Cash.`);
+        alert(
+          `Open Messages and send: "${message}" to request payment via Apple Pay Cash.`
+        );
       }
     }, 500);
   };
@@ -233,7 +290,7 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
     // URL-encode the base64 string to handle special characters (+, /, =)
     const urlSafeBase64 = encodeURIComponent(base64);
     // Ensure we use the correct path
-    const path = window.location.pathname || '/receipt-scanner';
+    const path = window.location.pathname || "/receipt-scanner";
     const shareUrl = `${window.location.origin}${path}?share=${urlSafeBase64}`;
     return shareUrl;
   };
@@ -245,11 +302,11 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
       setTimeout(() => setLinkCopied(false), 2000);
     } catch (err) {
       // Fallback for older browsers
-      const textArea = document.createElement('textarea');
+      const textArea = document.createElement("textarea");
       textArea.value = text;
       document.body.appendChild(textArea);
       textArea.select();
-      document.execCommand('copy');
+      document.execCommand("copy");
       document.body.removeChild(textArea);
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
@@ -266,23 +323,33 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
       try {
         // Generate the preview image
         const imageBlob = await generateReceiptImage();
-        
+
         const shareData: ShareData = {
-          title: 'Receipt to Split',
+          title: "Receipt to Split",
           text: shareText, // URL in text on new line will be auto-detected
         };
-        
+
         // Add image if available and supported
-        if (imageBlob && navigator.canShare && navigator.canShare({ files: [new File([imageBlob], 'receipt.png', { type: 'image/png' })] })) {
-          shareData.files = [new File([imageBlob], 'receipt-preview.png', { type: 'image/png' })];
+        if (
+          imageBlob &&
+          navigator.canShare &&
+          navigator.canShare({
+            files: [
+              new File([imageBlob], "receipt.png", { type: "image/png" }),
+            ],
+          })
+        ) {
+          shareData.files = [
+            new File([imageBlob], "receipt-preview.png", { type: "image/png" }),
+          ];
         }
-        
+
         await navigator.share(shareData);
         return; // Successfully shared via native share
       } catch (err) {
         // User cancelled or share failed, fall through to dialog
-        if ((err as Error).name !== 'AbortError') {
-          console.error('Share failed:', err);
+        if ((err as Error).name !== "AbortError") {
+          console.error("Share failed:", err);
         }
       }
     }
@@ -299,22 +366,23 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
   const generateReceiptImage = async (): Promise<Blob | null> => {
     try {
       // Create an iframe to completely isolate styles
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'absolute';
-      iframe.style.left = '-9999px';
-      iframe.style.top = '0';
-      iframe.style.width = '700px';
-      iframe.style.height = '800px';
-      iframe.style.border = 'none';
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "absolute";
+      iframe.style.left = "-9999px";
+      iframe.style.top = "0";
+      iframe.style.width = "700px";
+      iframe.style.height = "800px";
+      iframe.style.border = "none";
       document.body.appendChild(iframe);
 
       // Wait for iframe to load
       await new Promise((resolve) => {
         iframe.onload = resolve;
-        iframe.src = 'about:blank';
+        iframe.src = "about:blank";
       });
 
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      const iframeDoc =
+        iframe.contentDocument || iframe.contentWindow?.document;
       if (!iframeDoc) {
         document.body.removeChild(iframe);
         return null;
@@ -338,29 +406,38 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
 
       // Create container in iframe
       const container = iframeDoc.body;
-      container.style.width = '600px';
-      container.style.margin = '0 auto';
-      container.style.padding = '32px';
-      container.style.background = '#f0f4f8';
+      container.style.width = "600px";
+      container.style.margin = "0 auto";
+      container.style.padding = "32px";
+      container.style.background = "#f0f4f8";
 
       // Render the preview card in iframe
       const shareLink = generateShareLink();
       const root = createRoot(container);
-      root.render(<ReceiptPreviewCard receiptData={editableReceiptData} shareLink={shareLink} />);
+      root.render(
+        <ReceiptPreviewCard
+          receiptData={editableReceiptData}
+          shareLink={shareLink}
+        />
+      );
 
       // Wait for render and QR code to load
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
       // Wait for QR code image to load
       const checkQRCode = () => {
         return new Promise<void>((resolve) => {
-          const qrImg = container.querySelector('#receipt-preview img[alt="QR Code"]') as HTMLImageElement;
+          const qrImg = container.querySelector(
+            '#receipt-preview img[alt="QR Code"]'
+          ) as HTMLImageElement;
           if (qrImg && qrImg.complete && qrImg.naturalWidth > 0) {
             resolve();
           } else {
             // Check again after a delay
             setTimeout(() => {
-              const retryImg = container.querySelector('#receipt-preview img[alt="QR Code"]') as HTMLImageElement;
+              const retryImg = container.querySelector(
+                '#receipt-preview img[alt="QR Code"]'
+              ) as HTMLImageElement;
               if (retryImg && retryImg.complete && retryImg.naturalWidth > 0) {
                 resolve();
               } else {
@@ -374,7 +451,9 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
       await checkQRCode();
 
       // Find the preview element
-      const previewElement = container.querySelector('#receipt-preview') as HTMLElement;
+      const previewElement = container.querySelector(
+        "#receipt-preview"
+      ) as HTMLElement;
       if (!previewElement) {
         root.unmount();
         document.body.removeChild(iframe);
@@ -383,7 +462,7 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
 
       // Generate image using html2canvas
       const canvas = await html2canvas(previewElement, {
-        backgroundColor: '#f0f4f8',
+        backgroundColor: "#f0f4f8",
         scale: 2,
         logging: false,
         useCORS: true,
@@ -398,39 +477,47 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
 
       // Convert to blob
       return new Promise((resolve) => {
-        canvas.toBlob((blob) => {
-          resolve(blob);
-        }, 'image/png', 0.95);
+        canvas.toBlob(
+          (blob) => {
+            resolve(blob);
+          },
+          "image/png",
+          0.95
+        );
       });
     } catch (error) {
-      console.error('Failed to generate image:', error);
+      console.error("Failed to generate image:", error);
       return null;
     }
   };
 
   const handleShareViaEmail = async () => {
     const shareLink = generateShareLink();
-    const subject = encodeURIComponent('Receipt to Split');
-    const body = encodeURIComponent(`Check out this receipt! Split the bill with me:\n\n${shareLink}`);
-    
+    const subject = encodeURIComponent("Receipt to Split");
+    const body = encodeURIComponent(
+      `Check out this receipt! Split the bill with me:\n\n${shareLink}`
+    );
+
     // Try to generate and attach image if possible
     const imageBlob = await generateReceiptImage();
-    
+
     if (imageBlob && navigator.share) {
       try {
-        const imageFile = new File([imageBlob], 'receipt-preview.png', { type: 'image/png' });
+        const imageFile = new File([imageBlob], "receipt-preview.png", {
+          type: "image/png",
+        });
         // Include URL in text on new line for better email client support
         await navigator.share({
-          title: 'Receipt to Split',
+          title: "Receipt to Split",
           text: `Check out this receipt! Split the bill with me\n\n${shareLink}`,
           files: [imageFile],
         });
         return;
       } catch (err) {
-        console.error('Share with image failed:', err);
+        console.error("Share with image failed:", err);
       }
     }
-    
+
     // Fallback to mailto
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
@@ -439,27 +526,29 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
     const shareLink = generateShareLink();
     // Format message so URL appears on its own line - Messages will auto-detect and make it clickable
     const text = `Check out this receipt! Split the bill with me\n\n${shareLink}`;
-    
+
     // Generate the preview image
     const imageBlob = await generateReceiptImage();
-    
+
     if (imageBlob && navigator.share) {
       try {
         // Create a File from the blob
-        const imageFile = new File([imageBlob], 'receipt-preview.png', { type: 'image/png' });
-        
+        const imageFile = new File([imageBlob], "receipt-preview.png", {
+          type: "image/png",
+        });
+
         // For Messages, include URL in text on separate line so it's auto-detected as clickable
         await navigator.share({
-          title: 'Receipt to Split',
+          title: "Receipt to Split",
           text: text, // URL in text on new line will be auto-detected as clickable link
           files: [imageFile],
         });
         return;
       } catch (err) {
-        console.error('Share with image failed:', err);
+        console.error("Share with image failed:", err);
       }
     }
-    
+
     // Fallback to SMS link - URL on new line will be auto-detected
     window.location.href = `sms:?body=${encodeURIComponent(text)}`;
   };
@@ -477,11 +566,11 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleShare}>
-            <Share2 className="w-4 h-4 mr-2" />
+            <Share2 />
             Share Receipt
           </Button>
           <Button variant="outline" onClick={onReset}>
-            <RotateCcw className="w-4 h-4 mr-2" />
+            <RotateCcw />
             Scan New Receipt
           </Button>
         </div>
@@ -493,164 +582,196 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
           <Card className="p-6">
             <h3 className="text-xl font-semibold mb-4">Items</h3>
             <div className="space-y-3">
-              {editableReceiptData?.items?.length > 0 ? editableReceiptData.items.map((item) => {
-                const isEditingName = editingItem?.id === item.id && editingItem?.field === 'name';
-                const isEditingPrice = editingItem?.id === item.id && editingItem?.field === 'price';
-                
-                return (
-                  <div
-                    key={item.id}
-                    className="group flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors relative"
-                  >
-                    <div className="flex items-center gap-3 flex-1">
-                      <Checkbox
-                        checked={selectedItems.has(item.id)}
-                        onCheckedChange={() => toggleItem(item.id)}
-                      />
-                      <div className="flex-1 flex items-center gap-2">
-                        {isEditingName ? (
-                          <Input
-                            defaultValue={item.name}
-                            onBlur={(e) => {
-                              const newName = e.target.value.trim();
-                              if (newName && newName !== item.name) {
-                                updateItemName(item.id, newName);
-                              } else {
-                                setEditingItem(null);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                const newName = e.currentTarget.value.trim();
+              {editableReceiptData?.items?.length > 0 ? (
+                editableReceiptData.items.map((item) => {
+                  const isEditingName =
+                    editingItem?.id === item.id &&
+                    editingItem?.field === "name";
+                  const isEditingPrice =
+                    editingItem?.id === item.id &&
+                    editingItem?.field === "price";
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="group flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors relative"
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <Checkbox
+                          checked={selectedItems.has(item.id)}
+                          onCheckedChange={() => toggleItem(item.id)}
+                        />
+                        <div className="flex-1 flex items-center gap-2">
+                          {isEditingName ? (
+                            <Input
+                              defaultValue={item.name}
+                              onBlur={(e) => {
+                                const newName = e.target.value.trim();
                                 if (newName && newName !== item.name) {
                                   updateItemName(item.id, newName);
                                 } else {
                                   setEditingItem(null);
                                 }
-                              } else if (e.key === 'Escape') {
-                                setEditingItem(null);
-                              }
-                            }}
-                            autoFocus
-                            className="h-8 text-sm flex-1"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        ) : (
-                          <div className="flex-1">
-                            <p 
-                              className="font-medium cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 inline-block"
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const newName = e.currentTarget.value.trim();
+                                  if (newName && newName !== item.name) {
+                                    updateItemName(item.id, newName);
+                                  } else {
+                                    setEditingItem(null);
+                                  }
+                                } else if (e.key === "Escape") {
+                                  setEditingItem(null);
+                                }
+                              }}
+                              autoFocus
+                              className="h-8 text-sm flex-1"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <div className="flex-1">
+                              <p
+                                className="font-medium cursor-pointer hover:text-primary inline-block"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log(
+                                    "Clicking to edit name for item:",
+                                    item.id
+                                  );
+                                  setEditingItem({
+                                    id: item.id,
+                                    field: "name",
+                                  });
+                                }}
+                                title="Click to edit"
+                              >
+                                {item.name}
+                              </p>
+                              {item.quantity > 1 && (
+                                <p className="text-sm text-gray-500 mt-1">
+                                  Qty: {item.quantity} × $
+                                  {item.price.toFixed(2)}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {!isEditingName && (
+                            <button
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                console.log('Clicking to edit name for item:', item.id);
-                                setEditingItem({ id: item.id, field: 'name' });
+                                console.log(
+                                  "Clicking pencil to edit name for item:",
+                                  item.id
+                                );
+                                setEditingItem({ id: item.id, field: "name" });
                               }}
-                              title="Click to edit"
+                              className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-opacity"
+                              title="Edit item name"
+                              type="button"
                             >
-                              {item.name}
-                            </p>
-                            {item.quantity > 1 && (
-                              <p className="text-sm text-gray-500 mt-1">
-                                Qty: {item.quantity} × ${item.price.toFixed(2)}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                        {!isEditingName && (
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              console.log('Clicking pencil to edit name for item:', item.id);
-                              setEditingItem({ id: item.id, field: 'name' });
-                            }}
-                            className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-opacity"
-                            title="Edit item name"
-                            type="button"
-                          >
-                            <Pencil className="w-4 h-4 text-gray-500" />
-                          </button>
-                        )}
+                              <Pencil className="w-4 h-4 text-gray-500" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isEditingPrice ? (
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          defaultValue={item.price.toFixed(2)}
-                          onBlur={(e) => {
-                            const newPrice = parseFloat(e.target.value);
-                            if (!isNaN(newPrice) && newPrice >= 0 && newPrice !== item.price) {
-                              updateItemPrice(item.id, newPrice);
-                            } else {
-                              setEditingItem(null);
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              const newPrice = parseFloat(e.currentTarget.value);
-                              if (!isNaN(newPrice) && newPrice >= 0 && newPrice !== item.price) {
+                      <div className="flex items-center gap-2">
+                        {isEditingPrice ? (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            defaultValue={item.price.toFixed(2)}
+                            onBlur={(e) => {
+                              const newPrice = parseFloat(e.target.value);
+                              if (
+                                !isNaN(newPrice) &&
+                                newPrice >= 0 &&
+                                newPrice !== item.price
+                              ) {
                                 updateItemPrice(item.id, newPrice);
                               } else {
                                 setEditingItem(null);
                               }
-                            } else if (e.key === 'Escape') {
-                              setEditingItem(null);
-                            }
-                          }}
-                          autoFocus
-                          className="h-8 w-24 text-sm text-right"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <>
-                          <span 
-                            className="font-semibold cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              console.log('Clicking to edit price for item:', item.id);
-                              setEditingItem({ id: item.id, field: 'price' });
                             }}
-                            title="Click to edit price"
-                          >
-                            ${(item.price * item.quantity).toFixed(2)}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              console.log('Clicking pencil to edit price for item:', item.id);
-                              setEditingItem({ id: item.id, field: 'price' });
-                            }}
-                            className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-opacity ml-1"
-                            title="Edit price"
-                            type="button"
-                          >
-                            <Pencil className="w-4 h-4 text-gray-500" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (confirm(`Delete "${item.name}"?`)) {
-                                deleteItem(item.id);
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const newPrice = parseFloat(
+                                  e.currentTarget.value
+                                );
+                                if (
+                                  !isNaN(newPrice) &&
+                                  newPrice >= 0 &&
+                                  newPrice !== item.price
+                                ) {
+                                  updateItemPrice(item.id, newPrice);
+                                } else {
+                                  setEditingItem(null);
+                                }
+                              } else if (e.key === "Escape") {
+                                setEditingItem(null);
                               }
                             }}
-                            className="opacity-60 hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-opacity ml-1"
-                            title="Delete item"
-                            type="button"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </button>
-                        </>
-                      )}
+                            autoFocus
+                            className="h-8 w-24 text-sm text-right"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <>
+                            <span
+                              className="font-semibold cursor-pointer hover:text-primary"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log(
+                                  "Clicking to edit price for item:",
+                                  item.id
+                                );
+                                setEditingItem({ id: item.id, field: "price" });
+                              }}
+                              title="Click to edit price"
+                            >
+                              ${(item.price * item.quantity).toFixed(2)}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log(
+                                  "Clicking pencil to edit price for item:",
+                                  item.id
+                                );
+                                setEditingItem({ id: item.id, field: "price" });
+                              }}
+                              className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-opacity ml-1"
+                              title="Edit price"
+                              type="button"
+                            >
+                              <Pencil className="w-4 h-4 text-gray-500" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (confirm(`Delete "${item.name}"?`)) {
+                                  deleteItem(item.id);
+                                }
+                              }}
+                              className="opacity-60 hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-opacity ml-1"
+                              title="Delete item"
+                              type="button"
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              }) : (
+                  );
+                })
+              ) : (
                 <p className="text-gray-500">No items found</p>
               )}
             </div>
@@ -665,7 +786,7 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
               <div className="flex justify-between items-center text-gray-600 dark:text-gray-400 group">
                 <span>Tax</span>
                 <div className="flex items-center gap-2">
-                  {editingField === 'tax' ? (
+                  {editingField === "tax" ? (
                     <Input
                       type="number"
                       step="0.01"
@@ -673,21 +794,29 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
                       defaultValue={editableReceiptData.tax.toFixed(2)}
                       onBlur={(e) => {
                         const newTax = parseFloat(e.target.value);
-                        if (!isNaN(newTax) && newTax >= 0 && newTax !== editableReceiptData.tax) {
+                        if (
+                          !isNaN(newTax) &&
+                          newTax >= 0 &&
+                          newTax !== editableReceiptData.tax
+                        ) {
                           updateTax(newTax);
                         } else {
                           setEditingField(null);
                         }
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                        if (e.key === "Enter") {
                           const newTax = parseFloat(e.currentTarget.value);
-                          if (!isNaN(newTax) && newTax >= 0 && newTax !== editableReceiptData.tax) {
+                          if (
+                            !isNaN(newTax) &&
+                            newTax >= 0 &&
+                            newTax !== editableReceiptData.tax
+                          ) {
                             updateTax(newTax);
                           } else {
                             setEditingField(null);
                           }
-                        } else if (e.key === 'Escape') {
+                        } else if (e.key === "Escape") {
                           setEditingField(null);
                         }
                       }}
@@ -697,12 +826,12 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
                     />
                   ) : (
                     <>
-                      <span 
-                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                      <span
+                        className="cursor-pointer hover:text-primary"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setEditingField('tax');
+                          setEditingField("tax");
                         }}
                         title="Click to edit tax"
                       >
@@ -712,7 +841,7 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setEditingField('tax');
+                          setEditingField("tax");
                         }}
                         className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-opacity"
                         title="Edit tax"
@@ -727,7 +856,7 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
               <div className="flex justify-between items-center text-gray-600 dark:text-gray-400 group">
                 <span>Tip</span>
                 <div className="flex items-center gap-2">
-                  {editingField === 'tip' ? (
+                  {editingField === "tip" ? (
                     <Input
                       type="number"
                       step="0.01"
@@ -735,21 +864,29 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
                       defaultValue={editableReceiptData.tip.toFixed(2)}
                       onBlur={(e) => {
                         const newTip = parseFloat(e.target.value);
-                        if (!isNaN(newTip) && newTip >= 0 && newTip !== editableReceiptData.tip) {
+                        if (
+                          !isNaN(newTip) &&
+                          newTip >= 0 &&
+                          newTip !== editableReceiptData.tip
+                        ) {
                           updateTip(newTip);
                         } else {
                           setEditingField(null);
                         }
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                        if (e.key === "Enter") {
                           const newTip = parseFloat(e.currentTarget.value);
-                          if (!isNaN(newTip) && newTip >= 0 && newTip !== editableReceiptData.tip) {
+                          if (
+                            !isNaN(newTip) &&
+                            newTip >= 0 &&
+                            newTip !== editableReceiptData.tip
+                          ) {
                             updateTip(newTip);
                           } else {
                             setEditingField(null);
                           }
-                        } else if (e.key === 'Escape') {
+                        } else if (e.key === "Escape") {
                           setEditingField(null);
                         }
                       }}
@@ -759,12 +896,12 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
                     />
                   ) : (
                     <>
-                      <span 
-                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                      <span
+                        className="cursor-pointer hover:text-primary"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setEditingField('tip');
+                          setEditingField("tip");
                         }}
                         title="Click to edit tip"
                       >
@@ -774,7 +911,7 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setEditingField('tip');
+                          setEditingField("tip");
                         }}
                         className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-opacity"
                         title="Edit tip"
@@ -797,21 +934,25 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
 
         {/* Payment Section */}
         <div className="space-y-4">
-          <Card className="p-6 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30">
+          <Card className="p-6 bg-muted/50">
             <div className="text-center mb-6">
-              <DollarSign className="w-12 h-12 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
+              <DollarSign className="w-12 h-12 text-primary mx-auto mb-2" />
               <h3 className="text-xl font-semibold mb-1">Your Share</h3>
-              <p className="text-4xl font-bold text-blue-600 dark:text-blue-400">
+              <p className="text-4xl font-bold text-primary">
                 ${selectedTotal.toFixed(2)}
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''} selected
+                {selectedItems.size} item{selectedItems.size !== 1 ? "s" : ""}{" "}
+                selected
               </p>
             </div>
 
             <div className="space-y-4">
               <div>
-                <Label htmlFor="personName">Your Name <Label className="text-xs text-gray-500">Optional</Label></Label>
+                <Label htmlFor="personName">
+                  Your Name{" "}
+                  <Label className="text-xs text-gray-500">Optional</Label>
+                </Label>
                 <Input
                   id="personName"
                   placeholder="Enter your name"
@@ -822,7 +963,10 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
               </div>
 
               <div>
-                <Label htmlFor="venmoUsername">Venmo Username <Label className="text-xs text-gray-500">Required</Label></Label>
+                <Label htmlFor="venmoUsername">
+                  Venmo Username{" "}
+                  <Label className="text-xs text-gray-500">Required</Label>
+                </Label>
                 <Input
                   id="venmoUsername"
                   placeholder="@username"
@@ -837,23 +981,20 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
 
               {isApplePayAvailable && (
                 <Button
-                  className="w-full bg-black text-white hover:bg-gray-800"
-                  size="lg"
                   onClick={handleApplePay}
                   disabled={selectedItems.size === 0}
                 >
-                  <MessageSquare className="w-4 h-4 mr-2" />
+                  <MessageSquare />
                   Request via Apple Pay Cash
                 </Button>
               )}
 
               <Button
                 className="w-full"
-                size="lg"
                 onClick={handleVenmoPayment}
                 disabled={selectedItems.size === 0 || venmoUsername === ""}
               >
-                <Users className="w-4 h-4 mr-2" />
+                <Users />
                 Open Venmo to Pay
               </Button>
 
@@ -885,7 +1026,8 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
           <DialogHeader>
             <DialogTitle>Share Receipt</DialogTitle>
             <DialogDescription>
-              Share this receipt link with others so they can split the bill with you.
+              Share this receipt link with others so they can split the bill
+              with you.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -901,15 +1043,11 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
                 onClick={handleCopyLink}
                 title="Copy link"
               >
-                {linkCopied ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
+                {linkCopied ? <Check /> : <Copy />}
               </Button>
             </div>
             {linkCopied && (
-              <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+              <p className="text-sm text-green-600 flex items-center gap-1">
                 <Check className="h-4 w-4" />
                 Link copied to clipboard!
               </p>
@@ -920,7 +1058,7 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
                 className="flex-1"
                 onClick={handleShareViaEmail}
               >
-                <Mail className="h-4 w-4 mr-2" />
+                <Mail />
                 Email
               </Button>
               <Button
@@ -928,7 +1066,7 @@ export default function ReceiptResults({ receiptData, onReset }: ReceiptResultsP
                 className="flex-1"
                 onClick={handleShareViaMessage}
               >
-                <MessageSquare className="h-4 w-4 mr-2" />
+                <MessageSquare />
                 Message
               </Button>
             </div>
