@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Camera, Upload, Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
@@ -31,47 +31,53 @@ export default function ReceiptScannerPage() {
   // Load receipt data from share link if present
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const shareData = params.get('share');
-    
+    const shareData = params.get("share");
+
     if (shareData) {
       try {
-        console.log('Loading from share link, data length:', shareData.length);
+        console.log("Loading from share link, data length:", shareData.length);
         // URLSearchParams.get() already URL-decodes the base64 string
         // Now decode the base64 and handle Unicode properly
         const base64Decoded = atob(shareData);
         const jsonString = decodeURIComponent(escape(base64Decoded));
-        console.log('Decoded JSON string:', jsonString.substring(0, 100) + '...');
+        console.log(
+          "Decoded JSON string:",
+          jsonString.substring(0, 100) + "..."
+        );
         const decodedData: ReceiptData = JSON.parse(jsonString);
-        
+
         // Validate the decoded data
         if (!decodedData.items || !Array.isArray(decodedData.items)) {
-          throw new Error('Invalid receipt data structure');
+          throw new Error("Invalid receipt data structure");
         }
-        
-        console.log('Successfully loaded receipt data:', decodedData);
+
+        console.log("Successfully loaded receipt data:", decodedData);
         setReceiptData(decodedData);
         // Clean up URL
-        window.history.replaceState({}, '', window.location.pathname);
+        window.history.replaceState({}, "", window.location.pathname);
       } catch (err) {
-        console.error('Failed to decode share link:', err);
-        console.error('Share data:', shareData.substring(0, 50) + '...');
-        setError('Invalid share link. Please try scanning a new receipt.');
+        console.error("Failed to decode share link:", err);
+        console.error("Share data:", shareData.substring(0, 50) + "...");
+        setError("Invalid share link. Please try scanning a new receipt.");
       }
     }
   }, []);
 
-  const resizeImage = async (file: File, maxSizeKB: number = 1024): Promise<File> => {
+  const resizeImage = async (
+    file: File,
+    maxSizeKB: number = 1024
+  ): Promise<File> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
           if (!ctx) {
-            reject(new Error('Could not get canvas context'));
+            reject(new Error("Could not get canvas context"));
             return;
           }
 
@@ -101,7 +107,7 @@ export default function ReceiptScannerPage() {
             canvas.toBlob(
               (blob) => {
                 if (!blob) {
-                  reject(new Error('Failed to compress image'));
+                  reject(new Error("Failed to compress image"));
                   return;
                 }
 
@@ -110,7 +116,7 @@ export default function ReceiptScannerPage() {
                 if (sizeKB <= maxSizeKB || quality <= 0.1) {
                   // Create a new File from the blob
                   const resizedFile = new File([blob], file.name, {
-                    type: 'image/jpeg',
+                    type: "image/jpeg",
                     lastModified: Date.now(),
                   });
                   resolve(resizedFile);
@@ -119,7 +125,7 @@ export default function ReceiptScannerPage() {
                   tryCompress(quality - 0.1);
                 }
               },
-              'image/jpeg',
+              "image/jpeg",
               quality
             );
           };
@@ -127,10 +133,10 @@ export default function ReceiptScannerPage() {
           // Start with 0.9 quality
           tryCompress(0.9);
         };
-        img.onerror = () => reject(new Error('Failed to load image'));
+        img.onerror = () => reject(new Error("Failed to load image"));
         img.src = e.target?.result as string;
       };
-      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.onerror = () => reject(new Error("Failed to read file"));
     });
   };
 
@@ -139,15 +145,15 @@ export default function ReceiptScannerPage() {
     setError(null);
 
     try {
-      console.log('Image captured, file size:', imageFile.size, 'bytes');
-      
+      console.log("Image captured, file size:", imageFile.size, "bytes");
+
       // Resize image to be under 1024 KB
       const resizedFile = await resizeImage(imageFile, 1024);
-      console.log('Image resized, new size:', resizedFile.size, 'bytes');
-      
+      console.log("Image resized, new size:", resizedFile.size, "bytes");
+
       // Convert resized image to base64
       const base64 = await fileToBase64(resizedFile);
-      console.log('Image converted to base64, length:', base64.length);
+      console.log("Image converted to base64, length:", base64.length);
 
       // Send to API for processing
       const response = await fetch("/api/process-receipt", {
@@ -158,29 +164,31 @@ export default function ReceiptScannerPage() {
         body: JSON.stringify({ image: base64 }),
       });
 
-      console.log('API response status:', response.status);
+      console.log("API response status:", response.status);
 
       const data = await response.json();
-      console.log('API response data:', data);
+      console.log("API response data:", data);
 
       if (!response.ok) {
         // Extract error message from API response
         const errorMessage = data.error || "Failed to process receipt";
-        console.error('API error:', errorMessage);
+        console.error("API error:", errorMessage);
         throw new Error(errorMessage);
       }
 
       // Check if response contains an error field (even if status is OK)
       if (data.error) {
-        console.error('Response contains error:', data.error);
+        console.error("Response contains error:", data.error);
         throw new Error(data.error);
       }
 
-      console.log('Receipt data received:', data);
+      console.log("Receipt data received:", data);
       setReceiptData(data);
     } catch (err) {
-      console.error('Error processing receipt:', err);
-      setError(err instanceof Error ? err.message : "Failed to process receipt");
+      console.error("Error processing receipt:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to process receipt"
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -201,15 +209,15 @@ export default function ReceiptScannerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900">
+    <div>
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-6">
-          <Link href="/">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-2" />
+          <Button variant="ghost" asChild>
+            <Link href="/">
+              <ArrowLeft />
               Back to Home
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
 
         {!receiptData && !isProcessing && (
@@ -218,8 +226,10 @@ export default function ReceiptScannerPage() {
 
         {isProcessing && (
           <Card className="p-12 text-center">
-            <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Processing Receipt...</h3>
+            <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">
+              Processing Receipt...
+            </h3>
             <p className="text-gray-600 dark:text-gray-400">
               Our processor is extracting items and prices from your receipt
             </p>
