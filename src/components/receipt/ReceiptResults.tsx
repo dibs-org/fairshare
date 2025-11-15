@@ -20,6 +20,7 @@ import {
   MessageSquare,
   Pencil,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -101,17 +102,6 @@ export default function ReceiptResults({
       // Show it on iOS or macOS Safari (be more permissive)
       const shouldShow = isIOS || (isMac && (isSafari || isSafariVendor));
 
-      console.log("Apple Pay detection:", {
-        isIOS,
-        isMac,
-        isSafari,
-        isSafariVendor,
-        shouldShow,
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
-        vendor: navigator.vendor,
-      });
-
       setIsApplePayAvailable(shouldShow);
     }
   }, []);
@@ -157,6 +147,7 @@ export default function ReceiptResults({
       ...editableReceiptData,
       items: updatedItems,
       ...totals,
+      error: editableReceiptData.error, // Preserve error field
     });
     setEditingItem(null);
   };
@@ -171,6 +162,7 @@ export default function ReceiptResults({
       ...editableReceiptData,
       items: updatedItems,
       ...totals,
+      error: editableReceiptData.error, // Preserve error field
     });
     setEditingItem(null);
   };
@@ -190,6 +182,7 @@ export default function ReceiptResults({
       ...editableReceiptData,
       items: updatedItems,
       ...totals,
+      error: editableReceiptData.error, // Preserve error field
     });
   };
 
@@ -197,7 +190,7 @@ export default function ReceiptResults({
     if (isNaN(newTax) || newTax < 0) return;
     const total =
       editableReceiptData.subtotal + newTax + editableReceiptData.tip;
-    setEditableReceiptData({ ...editableReceiptData, tax: newTax, total });
+    setEditableReceiptData({ ...editableReceiptData, tax: newTax, total, error: editableReceiptData.error });
     setEditingField(null);
   };
 
@@ -205,7 +198,7 @@ export default function ReceiptResults({
     if (isNaN(newTip) || newTip < 0) return;
     const total =
       editableReceiptData.subtotal + editableReceiptData.tax + newTip;
-    setEditableReceiptData({ ...editableReceiptData, tip: newTip, total });
+    setEditableReceiptData({ ...editableReceiptData, tip: newTip, total, error: editableReceiptData.error });
     setEditingField(null);
   };
 
@@ -565,13 +558,13 @@ export default function ReceiptResults({
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleShare}>
-            <Share2 />
-            Share Receipt
+          <Button variant="outline" onClick={handleShare} className="md:px-4">
+            <Share2 className="w-4 h-4" />
+            <span className="hidden md:inline ml-2">Share Receipt</span>
           </Button>
-          <Button variant="outline" onClick={onReset}>
-            <RotateCcw />
-            Scan New Receipt
+          <Button variant="outline" onClick={onReset} className="md:px-4">
+            <RotateCcw className="w-4 h-4" />
+            <span className="hidden md:inline ml-2">Scan New Receipt</span>
           </Button>
         </div>
       </div>
@@ -580,7 +573,15 @@ export default function ReceiptResults({
         {/* Items List */}
         <div className="lg:col-span-2 space-y-4">
           <Card className="p-6">
-            <h3 className="text-xl font-semibold mb-4">Items</h3>
+            <div className="flex items-center gap-2 mb-4">
+              <h3 className="text-xl font-semibold">Items</h3>
+              {editableReceiptData?.error === "subtotal_mismatch" && (
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700" title="Subtotal doesn't match calculated total">
+                  <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                  <span className="text-xs font-medium text-amber-800 dark:text-amber-300">Subtotal mismatch</span>
+                </div>
+              )}
+            </div>
             <div className="space-y-3">
               {editableReceiptData?.items?.length > 0 ? (
                 editableReceiptData.items.map((item) => {

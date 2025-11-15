@@ -21,6 +21,7 @@ export type ReceiptData = {
   tax: number;
   tip: number;
   total: number;
+  error?: string;
 };
 
 export default function ReceiptScannerPage() {
@@ -176,14 +177,11 @@ export default function ReceiptScannerPage() {
         throw new Error(errorMessage);
       }
 
-      // Check if response contains an error field (even if status is OK)
-      if (data.error) {
-        console.error("Response contains error:", data.error);
-        throw new Error(data.error);
-      }
-
       console.log("Receipt data received:", data);
       setReceiptData(data);
+      if (!subtotalEqualsItemsTotal(data)) {
+        console.error("Subtotal does not equal items total. Please check your receipt.");
+      }
     } catch (err) {
       console.error("Error processing receipt:", err);
       setError(
@@ -193,6 +191,16 @@ export default function ReceiptScannerPage() {
       setIsProcessing(false);
     }
   };
+
+  const subtotalEqualsItemsTotal = (receiptData: ReceiptData) => {
+    let total = receiptData.items.reduce((sum, item) => {
+      return sum + item.price;
+    }, 0);
+    total = total + receiptData.tax + receiptData.tip;
+    console.log('total:', total);
+    console.log('subtotal:', receiptData.subtotal);
+    return receiptData.subtotal === total;
+  }
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
